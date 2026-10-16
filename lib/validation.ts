@@ -13,6 +13,25 @@ export const passwordChangeSchema = z.object({
     .max(200, "New password is too long."),
 });
 
+// Metadata for an image that was uploaded directly to Cloudinary from the
+// browser (bypassing the serverless 4.5MB request-body limit).
+export const photoCreateSchema = z.object({
+  url: z
+    .string()
+    .trim()
+    .max(600, "Image URL is too long.")
+    .refine(
+      (value) => /^https:\/\/res\.cloudinary\.com\/\S+$/i.test(value),
+      { message: "Image URL must be a Cloudinary URL." },
+    ),
+  publicId: z.string().trim().max(300).nullish(),
+  width: z.number().int().positive().max(100000).optional(),
+  height: z.number().int().positive().max(100000).optional(),
+  title: z.string().trim().max(140, "Title is too long.").optional(),
+  category: z.string().trim().max(60, "Category is too long.").optional(),
+  featured: z.boolean().optional(),
+});
+
 export const photoUpdateSchema = z
   .object({
     title: z.string().trim().max(140, "Title is too long.").optional(),
@@ -84,6 +103,7 @@ export const settingsSchema = z.object({
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ContactInput = z.infer<typeof contactSchema>;
 export type PasswordChangeInput = z.infer<typeof passwordChangeSchema>;
+export type PhotoCreateInput = z.infer<typeof photoCreateSchema>;
 export type PhotoUpdateInput = z.infer<typeof photoUpdateSchema>;
 export type SettingsInput = z.infer<typeof settingsSchema>;
 export type SocialLinksInput = z.infer<typeof socialLinksSchema>;

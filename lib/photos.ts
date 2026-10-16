@@ -150,10 +150,6 @@ export async function updatePhoto(
   if (!Types.ObjectId.isValid(id)) return null;
   await connectDB();
 
-  if (input.featured === true) {
-    await Photo.updateMany({ _id: { $ne: id } }, { $set: { featured: false } });
-  }
-
   const doc = await Photo.findByIdAndUpdate(
     id,
     { $set: input },

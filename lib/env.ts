@@ -26,6 +26,22 @@ export function getMongoUri(): string {
       "MONGODB_URI is not configured. Add it to your .env.local file.",
     );
   }
+  if (!/^mongodb(\+srv)?:\/\//i.test(uri)) {
+    throw new Error(
+      "MONGODB_URI must start with mongodb:// or mongodb+srv://.",
+    );
+  }
+  // Guard against writing into MongoDB's default "test" database when the
+  // connection string has no database path (e.g. "...mongodb.net/").
+  const match = uri.match(/^mongodb(\+srv)?:\/\/([^/?]+)(\/[^?]*)?(\?.*)?$/i);
+  if (match) {
+    const host = match[2];
+    const dbPath = (match[3] ?? "").replace(/\/$/, "");
+    const query = match[4] ?? "";
+    if (!dbPath) {
+      return `mongodb${match[1] ?? ""}://${host}/hugphotos${query}`;
+    }
+  }
   return uri;
 }
 
@@ -38,14 +54,35 @@ export function getMaxUploadBytes(): number {
   return mb * 1024 * 1024;
 }
 
+// Initial-admin credentials for the one-time bootstrap. Returns null unless a
+// username AND password are explicitly provided via the server-side environment
+// (ADMIN_INITIAL_USERNAME/ADMIN_INITIAL_PASSWORD, with ADMIN_USERNAME/
+// ADMIN_PASSWORD kept as legacy aliases). There is deliberately no built-in
+// default password: seeding must never be possible with a guessable value.
 export function getInitialAdminCredentials(): {
   username: string;
   password: string;
-} {
-  return {
-    username: process.env.ADMIN_USERNAME?.trim() || "Admin",
-    password: process.env.ADMIN_PASSWORD || "admin@123",
-  };
+} | null {
+  const username = (
+    process.env.ADMIN_INITIAL_USERNAME?.trim() ||
+    process.env.ADMIN_USERNAME?.trim() ||
+    ""
+  ).slice(0, 60);
+  const password =
+    process.env.ADMIN_INITIAL_PASSWORD || process.env.ADMIN_PASSWORD || "";
+
+  if (!username || !password) return null;
+  if (username.length < 3) {
+    throw new Error(
+      "ADMIN_INITIAL_USERNAME must be at least 3 characters long.",
+    );
+  }
+  if (password.length < 8) {
+    throw new Error(
+      "ADMIN_INITIAL_PASSWORD must be at least 8 characters long.",
+    );
+  }
+  return { username, password };
 }
 
 export function getCloudinaryConfig(): {

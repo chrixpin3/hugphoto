@@ -46,13 +46,20 @@ async function main() {
   const uri = mongod.getUri();
   console.log("Mongo ready at", uri);
 
+  const ADMIN_USER = process.env.ADMIN_INITIAL_USERNAME || "Admin";
+  const ADMIN_PASS = process.env.ADMIN_INITIAL_PASSWORD || "admin@123";
+
   const env = {
     ...process.env,
     NODE_ENV: "development",
     MONGODB_URI: uri,
     AUTH_SECRET: "e2e-test-secret-e2e-test-secret-123456",
-    ADMIN_USERNAME: process.env.ADMIN_USERNAME || "Admin",
-    ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || "admin@123",
+    ADMIN_INITIAL_USERNAME: ADMIN_USER,
+    ADMIN_INITIAL_PASSWORD: ADMIN_PASS,
+    // Legacy aliases are cleared so a developer's .env.local cannot shadow
+    // the credentials this harness seeds and logs in with.
+    ADMIN_USERNAME: "",
+    ADMIN_PASSWORD: "",
     NEXT_PUBLIC_SITE_URL: BASE,
     NEXT_PUBLIC_WHATSAPP_NUMBER: "",
     NODE_OPTIONS: "",
@@ -74,7 +81,7 @@ async function main() {
     res = await fetch(`${BASE}/api/admin/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: "Admin", password: "wrong-password" }),
+      body: JSON.stringify({ username: ADMIN_USER, password: "wrong-password" }),
     });
     body = await res.json().catch(() => ({}));
     check("wrong password rejected", res.status === 401, `status=${res.status} ${JSON.stringify(body)}`);
@@ -83,7 +90,7 @@ async function main() {
     res = await fetch(`${BASE}/api/admin/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: "Admin", password: "admin@123" }),
+      body: JSON.stringify({ username: ADMIN_USER, password: ADMIN_PASS }),
     });
     const setCookie = res.headers.get("set-cookie") || "";
     body = await res.json().catch(() => ({}));

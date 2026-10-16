@@ -12,6 +12,7 @@ import {
 
 export interface SessionPayload {
   username: string;
+  version: number;
 }
 
 const BCRYPT_ROUNDS = 12;
@@ -34,7 +35,7 @@ export async function verifyPassword(
 export async function createSessionToken(
   payload: SessionPayload,
 ): Promise<string> {
-  return new SignJWT({ username: payload.username })
+  return new SignJWT({ username: payload.username, v: payload.version })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setIssuedAt()
     .setExpirationTime(`${getSessionMaxAgeSeconds()}s`)
@@ -48,7 +49,11 @@ export async function verifySessionToken(
     const { payload } = await jwtVerify(token, secretKey());
     const username = typeof payload.username === "string" ? payload.username : "";
     if (!username) return null;
-    return { username };
+    const version =
+      typeof payload.v === "number" && Number.isFinite(payload.v)
+        ? payload.v
+        : 0;
+    return { username, version };
   } catch {
     return null;
   }
@@ -71,7 +76,19 @@ export async function requireAdmin(): Promise<AdminRecord | null> {
     .lean<AdminRecord>()
     .exec();
 
-  return admin ?? null;
+  if (!admin) return null;
+  // Reject tokens issued before the last logout/password change.
+  if ((admin.sessionVersion ?? 0) !== session.version) return null;
+
+  return admin;
+}
+
+// Invalidates every outstanding session token for the administrator by
+// bumping their session version. Best-effort: callers log but ignore errors
+// (e.g. during logout when the database is briefly unreachable).
+export async function revokeAdminSessions(username: string): Promise<void> {
+  await connectDB();
+  await Admin.updateOne({ username }, { $inc: { sessionVersion: 1 } }).exec();
 }
 
 export async function findAdminByUsername(
@@ -84,18 +101,24 @@ export async function findAdminByUsername(
     .exec();
 }
 
+// One-time bootstrap: creates the first administrator only when the database
+// contains no administrator at all AND explicit initial credentials are
+// provided through server-side environment variables. Existing administrators
+// are never overwritten.
 export async function ensureAdminSeeded(): Promise<{ seeded: boolean }> {
   await connectDB();
   const count = await Admin.estimatedDocumentCount();
   if (count > 0) return { seeded: false };
 
-  const { username, password } = getInitialAdminCredentials();
-  const passwordHash = await hashPassword(password);
-  await Admin.create({ username, passwordHash });
+  const credentials = getInitialAdminCredentials();
+  if (!credentials) return { seeded: false };
+
+  const passwordHash = await hashPassword(credentials.password);
+  await Admin.create({ username: credentials.username, passwordHash });
 
   if (process.env.NODE_ENV !== "production") {
     console.warn(
-      `[HUG Photos] Seeded initial administrator "${username}". ` +
+      `[HUG Photos] Seeded initial administrator "${credentials.username}". ` +
         "Change this password from the dashboard before deploying.",
     );
   }

@@ -1,13 +1,15 @@
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/admin/login-form";
-import { getSession } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminLoginPage() {
   let authenticated = false;
   try {
-    authenticated = Boolean(await getSession());
+    // requireAdmin (not just the JWT) so revoked sessions land on this page
+    // instead of bouncing between /admin/dashboard and /admin/login.
+    authenticated = Boolean(await requireAdmin());
   } catch {
     authenticated = false;
   }

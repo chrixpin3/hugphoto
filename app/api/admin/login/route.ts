@@ -7,6 +7,12 @@ import {
   setSessionCookie,
   verifyPassword,
 } from "@/lib/auth";
+import {
+  checkRateLimit,
+  clearFailures,
+  clientIp,
+  recordFailure,
+} from "@/lib/rate-limit";
 import { loginSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -25,6 +31,26 @@ export async function POST(request: NextRequest) {
     return fail(parsed.error.issues[0]?.message ?? "Invalid credentials.", 422);
   }
 
+  const username = parsed.data.username.toLowerCase();
+  const rateKey = `${clientIp(request.headers)}|${username}`;
+
+  const limited = checkRateLimit(rateKey);
+  if (!limited.allowed) {
+    return new Response(
+      JSON.stringify({
+        error:
+          "Too many failed sign-in attempts. Please wait a few minutes and try again.",
+      }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "Retry-After": String(limited.retryAfterSeconds),
+        },
+      },
+    );
+  }
+
   try {
     await ensureAdminSeeded();
 
@@ -34,10 +60,16 @@ export async function POST(request: NextRequest) {
       : false;
 
     if (!admin || !valid) {
+      recordFailure(rateKey);
       return fail("Incorrect username or password.", 401);
     }
 
-    const token = await createSessionToken({ username: admin.username });
+    clearFailures(rateKey);
+
+    const token = await createSessionToken({
+      username: admin.username,
+      version: admin.sessionVersion ?? 0,
+    });
     await setSessionCookie(token);
 
     return ok({ username: admin.username });

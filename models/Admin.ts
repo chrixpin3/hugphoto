@@ -3,6 +3,7 @@ import mongoose, { Schema, type Model, type Types } from "mongoose";
 export interface AdminDocument {
   username: string;
   passwordHash: string;
+  sessionVersion?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,6 +24,13 @@ const AdminSchema = new Schema<AdminDocument>(
       type: String,
       required: true,
       select: false,
+    },
+    // Bumped on logout and password change; session tokens carrying an older
+    // version are rejected, so stolen/expired-browser tokens die with the
+    // session instead of staying valid until JWT expiry.
+    sessionVersion: {
+      type: Number,
+      default: 0,
     },
   },
   {

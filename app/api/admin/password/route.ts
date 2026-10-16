@@ -1,12 +1,14 @@
 import type { NextRequest } from "next/server";
 import { fail, ok } from "@/lib/http";
 import {
+  createSessionToken,
   hashPassword,
   requireAdmin,
+  setSessionCookie,
   verifyPassword,
 } from "@/lib/auth";
 import { passwordChangeSchema } from "@/lib/validation";
-import { Admin } from "@/models/Admin";
+import { Admin, type AdminRecord } from "@/models/Admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,10 +41,21 @@ export async function POST(request: NextRequest) {
     }
 
     const passwordHash = await hashPassword(parsed.data.newPassword);
-    await Admin.updateOne(
+    // Bumping sessionVersion revokes every outstanding session token; the
+    // caller immediately receives a fresh cookie for the new version.
+    const updated = await Admin.findOneAndUpdate(
       { _id: admin._id },
-      { $set: { passwordHash } },
-    ).exec();
+      { $set: { passwordHash }, $inc: { sessionVersion: 1 } },
+      { new: true },
+    )
+      .lean<AdminRecord | null>()
+      .exec();
+
+    const token = await createSessionToken({
+      username: admin.username,
+      version: updated?.sessionVersion ?? (admin.sessionVersion ?? 0) + 1,
+    });
+    await setSessionCookie(token);
 
     return ok({ success: true });
   } catch (error) {

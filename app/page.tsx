@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Reveal } from "@/components/reveal";
 import { SectionHeading } from "@/components/section-heading";
 import { SiteShell } from "@/components/site-shell";
-import { listRecentPhotos } from "@/lib/photos";
+import { listFeaturedPhotos, listRecentPhotos } from "@/lib/photos";
 import { services } from "@/lib/site";
 import { getSettingsSafe } from "@/lib/settings";
 import type { PhotoDTO } from "@/lib/types";
@@ -19,11 +19,14 @@ async function safe<T>(promise: Promise<T>, fallback: T): Promise<T> {
 }
 
 export default async function HomePage() {
-  const [recent, settings] = await Promise.all([
+  const [recent, featured, settings] = await Promise.all([
     safe(listRecentPhotos(8), [] as PhotoDTO[]),
+    safe(listFeaturedPhotos(8), [] as PhotoDTO[]),
     getSettingsSafe(),
   ]);
-  const previewPhotos = recent.slice(0, 3);
+  // Prefer curated featured photographs; fall back to the latest uploads.
+  const collection = featured.length > 0 ? featured : recent;
+  const previewPhotos = collection.slice(0, 3);
 
   return (
     <SiteShell>
@@ -197,9 +200,9 @@ export default async function HomePage() {
               </div>
             </Reveal>
 
-            {recent.length > 0 ? (
+            {collection.length > 0 ? (
               <div className="mt-14 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-                {recent.slice(0, 8).map((photo, index) => (
+                {collection.slice(0, 8).map((photo, index) => (
                   <Reveal key={photo.id} delay={(index % 4) * 70}>
                     <Link
                       href="/gallery"

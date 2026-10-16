@@ -1,13 +1,15 @@
 import { ok } from "@/lib/http";
-import { getSession } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const session = await getSession();
+  // requireAdmin validates the token AND checks it against the stored session
+  // version, so logged-out (revoked) tokens report as unauthenticated.
+  const admin = await requireAdmin();
   return ok({
-    authenticated: Boolean(session),
-    username: session?.username ?? null,
+    authenticated: Boolean(admin),
+    username: admin?.username ?? null,
   });
 }

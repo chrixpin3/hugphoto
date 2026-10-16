@@ -8,6 +8,10 @@ import type { PhotoDTO } from "@/lib/types";
 
 interface ManagePanelProps {
   photos: PhotoDTO[];
+  totalPhotos?: number;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
   onChanged: () => Promise<void> | void;
   notify: (kind: ToastKind, message: string) => void;
   onUnauthorized: () => void;
@@ -29,6 +33,10 @@ const DANGER_BTN =
 
 export function ManagePanel({
   photos,
+  totalPhotos,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
   onChanged,
   notify,
   onUnauthorized,
@@ -161,7 +169,9 @@ export function ManagePanel({
             Manage photographs
           </h2>
           <span className="text-xs uppercase tracking-[0.18em] text-mist/50">
-            {filtered.length} shown
+            {typeof totalPhotos === "number" && totalPhotos > photos.length
+              ? `${photos.length} of ${totalPhotos} loaded`
+              : `${filtered.length} shown`}
           </span>
         </div>
 
@@ -281,6 +291,19 @@ export function ManagePanel({
           ))}
         </ul>
       )}
+
+      {hasMore && onLoadMore ? (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={onLoadMore}
+            disabled={loadingMore}
+            className="admin-btn-outline"
+          >
+            {loadingMore ? "Loading…" : "Load more photographs"}
+          </button>
+        </div>
+      ) : null}
 
       {editing && editState ? (
         <div className="fixed inset-0 z-[130] flex items-center justify-center bg-navy/70 px-4 backdrop-blur-sm animate-fade-in">

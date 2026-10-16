@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import { countPhotos, createPhoto, listAllPhotos } from "@/lib/photos";
 import { ALLOWED_MIME_TYPES, storeImage } from "@/lib/storage";
 import { getMaxUploadBytes } from "@/lib/env";
+import { photoCreateSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,9 +36,48 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Persists a photo whose image was already uploaded directly to Cloudinary from
+// the browser (keeps large files under the serverless request-body limit).
+async function createFromDirectUpload(
+  request: NextRequest,
+): Promise<Response> {
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch {
+    return fail("Invalid request body.", 400);
+  }
+
+  const parsed = photoCreateSchema.safeParse(payload);
+  if (!parsed.success) {
+    return fail(parsed.error.issues[0]?.message ?? "Invalid input.", 422);
+  }
+
+  try {
+    const photo = await createPhoto({
+      url: parsed.data.url,
+      publicId: parsed.data.publicId ?? null,
+      width: parsed.data.width,
+      height: parsed.data.height,
+      title: parsed.data.title,
+      category: parsed.data.category,
+      featured: parsed.data.featured,
+    });
+    return ok({ photo, provider: "cloudinary" }, 201);
+  } catch (error) {
+    console.error("[api/admin/photos] Failed to save direct upload:", error);
+    return fail("Upload failed. Please try again.", 500);
+  }
+}
+
 export async function POST(request: NextRequest) {
   const admin = await requireAdmin();
   if (!admin) return fail("Unauthorized.", 401);
+
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    return createFromDirectUpload(request);
+  }
 
   let form: FormData;
   try {

@@ -104,42 +104,122 @@ export function UploadPanel({
     );
   };
 
-  const uploadEntry = (entry: Entry) =>
-    new Promise<void>((resolve, reject) => {
+  const xhrPost = (
+    url: string,
+    form: FormData,
+    onProgress: (percent: number) => void,
+  ) =>
+    new Promise<{ status: number; text: string }>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/api/admin/photos");
-
+      xhr.open("POST", url);
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) {
-          updateEntry(entry.id, {
-            progress: Math.round((event.loaded / event.total) * 100),
-          });
+          onProgress(Math.round((event.loaded / event.total) * 100));
         }
       };
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          const data = parseJson<{ photo: PhotoDTO }>(xhr.responseText);
-          if (data?.photo) onUploaded(data.photo);
-          resolve();
-        } else if (xhr.status === 401) {
-          onUnauthorized();
-          reject(new Error("Your session has expired. Please sign in again."));
-        } else {
-          const data = parseJson<{ error?: string }>(xhr.responseText);
-          reject(new Error(data?.error || "Upload failed."));
-        }
-      };
-
+      xhr.onload = () =>
+        resolve({ status: xhr.status, text: xhr.responseText });
       xhr.onerror = () => reject(new Error("Network error while uploading."));
-
-      const form = new FormData();
-      form.append("file", entry.file);
-      if (title.trim()) form.append("title", title.trim());
-      if (category.trim()) form.append("category", category.trim());
-      if (featured) form.append("featured", "true");
+      xhr.onabort = () => reject(new Error("Upload cancelled."));
       xhr.send(form);
     });
+
+  const handleResponse = (status: number, text: string): PhotoDTO => {
+    const body = parseJson<{ photo?: PhotoDTO; error?: string }>(text);
+    if (status >= 200 && status < 300) {
+      if (!body?.photo) throw new Error("Upload failed.");
+      return body.photo;
+    }
+    if (status === 401) {
+      onUnauthorized();
+      throw new Error("Your session has expired. Please sign in again.");
+    }
+    throw new Error(body?.error || "Upload failed.");
+  };
+
+  const uploadToServer = async (entry: Entry): Promise<PhotoDTO> => {
+    const form = new FormData();
+    form.append("file", entry.file);
+    if (title.trim()) form.append("title", title.trim());
+    if (category.trim()) form.append("category", category.trim());
+    if (featured) form.append("featured", "true");
+    const { status, text } = await xhrPost("/api/admin/photos", form, (p) =>
+      updateEntry(entry.id, { progress: p }),
+    );
+    return handleResponse(status, text);
+  };
+
+  // Uploads straight to Cloudinary so the file never passes through the
+  // serverless function (which caps request bodies at 4.5MB on Vercel).
+  const uploadToCloudinary = async (entry: Entry): Promise<PhotoDTO> => {
+    const sigRes = await fetch("/api/admin/upload-signature", {
+      cache: "no-store",
+    });
+    if (sigRes.status === 401) {
+      onUnauthorized();
+      throw new Error("Your session has expired. Please sign in again.");
+    }
+    const config = (await sigRes.json().catch(() => ({}))) as {
+      cloudName?: string;
+      apiKey?: string;
+      folder?: string;
+      timestamp?: number;
+      signature?: string;
+      error?: string;
+    };
+    if (!sigRes.ok || !config.cloudName || !config.signature) {
+      throw new Error(config.error || "Image storage is not configured.");
+    }
+
+    const form = new FormData();
+    form.append("file", entry.file);
+    form.append("api_key", config.apiKey ?? "");
+    form.append("timestamp", String(config.timestamp ?? ""));
+    form.append("signature", config.signature);
+    if (config.folder) form.append("folder", config.folder);
+
+    const { status, text } = await xhrPost(
+      `https://api.cloudinary.com/v1_1/${config.cloudName}/image/upload`,
+      form,
+      (p) => updateEntry(entry.id, { progress: p }),
+    );
+
+    if (status < 200 || status >= 300) {
+      const error = parseJson<{ error?: { message?: string } }>(text);
+      throw new Error(error?.error?.message || "Cloudinary upload failed.");
+    }
+
+    const uploaded = parseJson<{
+      secure_url?: string;
+      public_id?: string;
+      width?: number;
+      height?: number;
+    }>(text);
+    if (!uploaded?.secure_url) throw new Error("Cloudinary upload failed.");
+
+    const createRes = await fetch("/api/admin/photos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: uploaded.secure_url,
+        publicId: uploaded.public_id ?? null,
+        width: uploaded.width,
+        height: uploaded.height,
+        title: title.trim() || undefined,
+        category: category.trim() || undefined,
+        featured,
+      }),
+    });
+    return handleResponse(createRes.status, await createRes.text());
+  };
+
+  const uploadEntry = async (entry: Entry) => {
+    const photo =
+      provider === "cloudinary"
+        ? await uploadToCloudinary(entry)
+        : await uploadToServer(entry);
+    onUploaded(photo);
+  };
 
   const startUpload = async () => {
     const pending = entries.filter(

@@ -66,6 +66,7 @@ export function DashboardClient({
   const [messages, setMessages] = useState(initialMessages);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const toastCounter = useRef(0);
 
   const dismissToast = useCallback((id: string) => {
@@ -103,6 +104,29 @@ export function DashboardClient({
     setPhotos(data.photos);
     setStats(data.stats);
   }, [handleUnauthorized]);
+
+  const loadMorePhotos = useCallback(async () => {
+    if (loadingMore || !photos.hasMore) return;
+    setLoadingMore(true);
+    try {
+      const response = await fetch(
+        `/api/admin/photos?page=${photos.page + 1}&pageSize=${photos.pageSize}`,
+        { cache: "no-store" },
+      );
+      if (response.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      if (!response.ok) return;
+      const data = (await response.json()) as { photos: Paginated<PhotoDTO> };
+      setPhotos((current) => ({
+        ...data.photos,
+        items: [...current.items, ...data.photos.items],
+      }));
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [handleUnauthorized, loadingMore, photos.hasMore, photos.page, photos.pageSize]);
 
   const refreshMessages = useCallback(async () => {
     const response = await fetch("/api/admin/messages", { cache: "no-store" });
@@ -320,6 +344,10 @@ export function DashboardClient({
             {tab === "photos" ? (
               <ManagePanel
                 photos={photos.items}
+                totalPhotos={photos.total}
+                hasMore={photos.hasMore}
+                loadingMore={loadingMore}
+                onLoadMore={() => void loadMorePhotos()}
                 onChanged={refreshPhotos}
                 notify={notify}
                 onUnauthorized={handleUnauthorized}
