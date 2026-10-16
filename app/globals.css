@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+
+  --color-ink: #111111;
+  --color-ink-soft: #2b2b2b;
+  --color-ink-muted: #6b6b6b;
+
+  --color-line: #e7e5e4;
+  --color-line-strong: #d6d3d1;
+
+  --color-navy: #171d35;
+  --color-navy-2: #1d2542;
+  --color-gold: #ffd91a;
+  --color-mist: #d8dce8;
+  --color-whatsapp: #16b879;
+
+  --shadow-soft: 0 1px 2px rgba(17, 17, 17, 0.05),
+    0 14px 40px -24px rgba(17, 17, 17, 0.35);
+  --shadow-lift: 0 30px 70px -34px rgba(17, 17, 17, 0.45);
+  --shadow-whatsapp: 0 10px 26px -6px rgb(22 184 121 / 0.55);
+
+  --animate-fade-in: fade-in 0.5s ease both;
+  --animate-fade-up: fade-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(28px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-white text-ink antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    @apply bg-ink text-white;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-ink/60 ring-offset-2 ring-offset-white;
+  }
+}
+
+@layer base {
+  .admin-theme {
+    color-scheme: dark;
+  }
+
+  .admin-theme ::selection {
+    @apply bg-gold text-navy;
+  }
+
+  .admin-theme :focus-visible {
+    @apply ring-2 ring-gold/70 ring-offset-2 ring-offset-navy;
+  }
+}
+
+@utility container-page {
+  @apply mx-auto w-full max-w-6xl px-6 sm:px-8;
+}
+
+@utility hero-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+
+@utility admin-panel {
+  @apply rounded-2xl border border-white/10 bg-navy-2;
+}
+
+@utility admin-input {
+  @apply w-full rounded-xl border border-white/10 bg-navy/60 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-mist/40 focus:border-gold focus:ring-2 focus:ring-gold/25 disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+@utility admin-label {
+  @apply text-xs font-semibold uppercase tracking-[0.2em] text-mist/70;
+}
+
+@utility admin-btn-primary {
+  @apply inline-flex items-center justify-center rounded-full bg-gold px-6 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-navy transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(255,217,26,0.35)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none;
+}
+
+@utility admin-btn-outline {
+  @apply inline-flex items-center justify-center rounded-full border border-white/20 px-5 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-white transition-colors hover:border-gold hover:text-gold disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+@utility admin-btn-danger {
+  @apply inline-flex items-center justify-center rounded-full border border-red-400/40 px-5 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-red-300 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50;
+}
